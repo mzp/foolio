@@ -1,5 +1,4 @@
 require "foolio/version"
-
+require "foolio/foolio_ext"
 module Foolio
-  # Your code goes here...
 end
