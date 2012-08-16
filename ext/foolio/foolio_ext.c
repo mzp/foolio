@@ -122,6 +122,15 @@ VALUE foolio_close(VALUE self, VALUE handle, VALUE cb) {
   uv_close(handle_, foolio__close_cb);
 }
 
+VALUE foolio_is_active(VALUE handle) {
+  uv_handle_t* handle_;
+  Data_Get_Struct(handle, uv_handle_t, handle_);
+  int retval = uv_is_active(handle_);
+  return INT2NUM(retval);
+}
+
+
+
 // ------------------------------
 // run
 // ------------------------------
