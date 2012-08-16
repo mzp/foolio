@@ -248,7 +248,11 @@ void* foolio___make_buf(void* args) {
 
 VALUE foolio__make_buf(char* ptr, ssize_t size) {
   struct MakeBufArg args = { ptr, size };
-  return (VALUE)rb_thread_call_with_gvl(foolio___make_buf, &args);
+  if(size == -1) {
+    return Qnil;
+  } else {
+    return (VALUE)rb_thread_call_with_gvl(foolio___make_buf, &args);
+  }
 }
 
 void foolio__read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf){
@@ -263,7 +267,6 @@ void foolio__read2_cb(uv_pipe_t* pipe, ssize_t nread, uv_buf_t buf, uv_handle_ty
 
 // UV_EXTERN int uv_read_start(uv_stream_t*, uv_alloc_cb alloc_cb, uv_read_cb read_cb)
 static VALUE foolio_read_start(VALUE self, VALUE stream, VALUE read_cb) {
-  //  uv_stream_t*;
   uv_stream_t* handle_;
   Data_Get_Struct(stream, uv_stream_t, handle_);
   handle_->data = (void*)callback(read_cb);
