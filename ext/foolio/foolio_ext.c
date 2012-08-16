@@ -38,6 +38,8 @@ struct CallbackData {
   VALUE cb;
   int argc;
   VALUE* argv;
+
+  VALUE on_close;
 };
 
 struct CallbackData* callback(VALUE cb) {
@@ -103,29 +105,38 @@ UV_EXTERN void uv_walk(uv_loop_t* loop, uv_walk_cb walk_cb, void* arg);
 UV_EXTERN void uv_close(uv_handle_t* handle, uv_close_cb close_cb);
 */
 void foolio__close_cb(uv_handle_t* handle) {
+  struct CallbackData* data = (struct CallbackData*)handle->data;
+  data->cb = data->on_close;
+  foolio__cb_apply(handle->loop, data, 0, 0);
   foolio__cb_free(handle->data);
   free(handle);
 }
 
-void foolio__close(uv_handle_t* handle) {
-  if(!uv_is_closing(handle)){ return; }
+void foolio__close(uv_handle_t* handle, VALUE cb) {
+  if(uv_is_closing(handle)){ return; }
+
+  if(handle->data == NULL) {
+    handle->data = malloc(sizeof(struct CallbackData*));
+  }
+  ((struct CallbackData*)handle->data)->on_close = (VALUE)cb;
+
   uv_close(handle, foolio__close_cb);
 }
 
-void foolio__close_all(uv_handle_t* handle, void* arg){
-  foolio__close(handle);
+void foolio__close_all(uv_handle_t* handle, void* cb){
+  foolio__close(handle, (VALUE)cb);
 }
 
-VALUE foolio_close_all(VALUE self, VALUE loop) {
+VALUE foolio_close_all(VALUE self, VALUE loop, VALUE cb) {
   uv_loop_t* loop_;
   Data_Get_Struct(loop, uv_loop_t, loop_);
-  uv_walk(loop_, foolio__close_all, NULL);
+  uv_walk(loop_, foolio__close_all, (void*)cb);
 }
 
-VALUE foolio_close(VALUE self, VALUE handle) {
+VALUE foolio_close(VALUE self, VALUE handle, VALUE cb) {
   uv_handle_t* handle_;
   Data_Get_Struct(handle, uv_handle_t, handle_);
-  foolio__close(handle_);
+  foolio__close(handle_, cb);
 }
 
 VALUE foolio_is_active(VALUE handle) {
@@ -793,7 +804,7 @@ void Init_foolio_ext(void) {
   Method(default_loop, 0);
   Method(loop_new, 0);
   Method(loop_delete, 1);
-  Method(close_all, 1);
+  Method(close_all, 2);
   Method(close, 2);
   Method(is_active, 1);
   Method(run, 1);
