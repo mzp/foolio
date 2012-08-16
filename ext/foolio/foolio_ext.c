@@ -45,6 +45,7 @@ struct CallbackData* callback(VALUE cb) {
   data->cb = cb;
   data->argc = 0;
   data->argv = NULL;
+  rb_gc_register_address(&cb);
   return data;
 }
 
@@ -76,6 +77,7 @@ static void foolio__cb_apply(uv_loop_t* loop, struct CallbackData* data, int arg
 }
 
 void foolio__cb_free(struct CallbackData* data) {
+  rb_gc_unregister_address(&data->cb);
   free(data);
 }
 
