@@ -4,8 +4,8 @@ require File.expand_path('../lib/foolio/version', __FILE__)
 Gem::Specification.new do |gem|
   gem.authors       = ["mzp"]
   gem.email         = ["mzpppp@gmail.com"]
-  gem.description   = %q{TODO: Write a gem description}
-  gem.summary       = %q{TODO: Write a gem summary}
+  gem.description   = "Wow"
+  gem.summary       = "Wow'
   gem.homepage      = ""
 
   gem.files         = `git ls-files`.split($\)
