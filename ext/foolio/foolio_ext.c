@@ -164,8 +164,8 @@ VALUE foolio_ip6_addr(VALUE self, VALUE ip, VALUE port) {
 }
 
 void foolio__connection_cb(uv_stream_t* server, int status) {
-  VALUE argv[] = { Wrap(server,0), INT2NUM(status) };
-  foolio__cb_apply(server->loop, server->data, 2, argv);
+  VALUE argv[] = { INT2FIX(status) };
+  foolio__cb_apply(server->loop, server->data, 1, argv);
 }
 
 // UV_EXTERN int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb)
@@ -182,14 +182,29 @@ uv_buf_t foolio__alloc(uv_handle_t* handle, size_t suggested_size) {
   return uv_buf_init((char*)malloc(suggested_size), (unsigned int)suggested_size);
 }
 
+struct MakeBufArg {
+  char* ptr;
+  ssize_t size;
+};
+
+void* foolio___make_buf(void* args) {
+  struct MakeBufArg* args_ = (struct MakeBufArg*) args;
+  return (void*)rb_str_new(args_->ptr, args_->size);
+}
+
+VALUE foolio__make_buf(char* ptr, ssize_t size) {
+  struct MakeBufArg args = { ptr, size };
+  return (VALUE)rb_thread_call_with_gvl(foolio___make_buf, &args);
+}
+
 void foolio__read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf){
-  VALUE argv[] = { Wrap(stream, 0), UINT2NUM(nread), rb_str_new(buf.base, nread) };
-  foolio__cb_apply(stream->loop, stream->data, 3, argv);
+  VALUE argv[] = { foolio__make_buf(buf.base, nread) };
+  foolio__cb_apply(stream->loop, stream->data, 1, argv);
 }
 
 void foolio__read2_cb(uv_pipe_t* pipe, ssize_t nread, uv_buf_t buf, uv_handle_type pending) {
-  VALUE argv[] = { Wrap(pipe, 0), UINT2NUM(nread), rb_str_new(buf.base, nread), INT2NUM(pending) };
-  foolio__cb_apply(pipe->loop, pipe->data, 4, argv);
+  VALUE argv[] = { foolio__make_buf(buf.base, nread), INT2FIX(pending) };
+  foolio__cb_apply(pipe->loop, pipe->data, 2, argv);
 }
 
 // UV_EXTERN int uv_read_start(uv_stream_t*, uv_alloc_cb alloc_cb, uv_read_cb read_cb)
@@ -222,8 +237,8 @@ VALUE foolio_read2_start(VALUE self, VALUE stream, VALUE read_cb) {
 }
 
 void foolio__write_cb(uv_write_t* req, int status){
-  VALUE argv[] = { Wrap(req, 0), INT2NUM(status) };
-  foolio__cb_apply(req->handle->loop, req->handle->data, 2, argv);
+  VALUE argv[] = { INT2FIX(status) };
+  foolio__cb_apply(req->handle->loop, req->handle->data, 1, argv);
 }
 
 // UV_EXTERN int uv_write(uv_write_t* req, uv_stream_t* handle, uv_buf_t bufs[], int bufcnt, uv_write_cb cb)
@@ -376,8 +391,8 @@ VALUE foolio_udp_set_ttl(VALUE self, VALUE handle, VALUE ttl) {
 }
 
 void foolio__udp_send_cb(uv_udp_send_t* req, int status) {
-  VALUE argv[] = { Wrap(req, 0), INT2NUM(status) };
-  foolio__cb_apply(req->handle->loop, req->handle->data, 2, argv);
+  VALUE argv[] = { INT2FIX(status) };
+  foolio__cb_apply(req->handle->loop, req->handle->data, 1 , argv);
 }
 
 // UV_EXTERN int uv_udp_send(uv_udp_send_t* req, uv_udp_t* handle, uv_buf_t bufs[], int bufcnt, struct sockaddr_in addr, uv_udp_send_cb send_cb)
@@ -443,13 +458,18 @@ VALUE foolio_udp_recv_stop(VALUE self, VALUE handle) {
   uv_udp_t* handle_;
   Data_Get_Struct(handle, uv_udp_t, handle_);
   int retval = uv_udp_recv_stop(handle_);
+  foolio__cb_free(handle_->data);
+  handle_->data = NULL;
   return INT2NUM(retval);
 }
 
+VALUE foolio__str(const char* str) {
+  return (VALUE)rb_thread_call_with_gvl((void *(*)(void *))rb_str_new_cstr, (void*)str);
+}
 
 void foolio__fs_event_cb(uv_fs_event_t* handle, const char* filename, int events, int status) {
-  VALUE argv[] = { Wrap(handle, 0), rb_str_new_cstr(filename), INT2NUM(events), INT2NUM(status) };
-  foolio__cb_apply(handle->loop, handle->data, 4, argv);
+  VALUE argv[] = { foolio__str(filename), INT2FIX(events), INT2FIX(status) };
+  foolio__cb_apply(handle->loop, handle->data, 3, argv);
 }
 
 VALUE foolio_tcp_init(VALUE self, VALUE loop) {
@@ -526,8 +546,8 @@ VALUE foolio_tcp_getpeername(VALUE self, VALUE handle, VALUE name, VALUE namelen
 }
 
 void foolio__connect_cb(uv_connect_t* req, int status) {
-  VALUE argv[] = { Wrap(req,0), INT2NUM(status) };
-  foolio__cb_apply(req->handle->loop, req->handle->data, 2, argv);
+  VALUE argv[] = { INT2FIX(status) };
+  foolio__cb_apply(req->handle->loop, req->handle->data, 1, argv);
 }
 
 // UV_EXTERN int uv_tcp_connect(uv_connect_t* req, uv_tcp_t* handle, struct sockaddr_in address, uv_connect_cb cb)
@@ -575,15 +595,15 @@ VALUE foolio_idle_init(VALUE self, VALUE loop) {
   InitHandle(idle);
 }
 
-static void idle_callback(uv_idle_t* handle, int status) {
-  VALUE argv[] = { Wrap(handle,0) , INT2NUM(status) };
-  foolio__cb_apply(handle->loop, handle->data, 2, argv);
+void foolio__idle_cb(uv_idle_t* handle, int status) {
+  VALUE argv[] = { INT2FIX(status) };
+  foolio__cb_apply(handle->loop, handle->data,1, argv);
 }
 
 VALUE foolio_idle_start(VALUE self, VALUE idle, VALUE cb) {
   Decl(idle);
   idle_p->data = callback(cb);
-  uv_idle_start(idle_p, idle_callback);
+  uv_idle_start(idle_p, foolio__idle_cb);
 }
 
 VALUE foolio_idle_stop(VALUE self, VALUE idle) {
@@ -606,8 +626,8 @@ VALUE foolio_timer_init(VALUE self, VALUE loop) {
 }
 
 static void timer_callback(uv_timer_t* handle, int status) {
-  VALUE argv[] = { Wrap(handle,0) , INT2NUM(status) };
-  foolio__cb_apply(handle->loop, handle->data, 2, argv);
+  VALUE argv[] = { INT2NUM(status) };
+  foolio__cb_apply(handle->loop, handle->data, 1, argv);
 }
 
 VALUE foolio_timer_start(VALUE self, VALUE timer, VALUE cb, VALUE timeout, VALUE repeat) {
