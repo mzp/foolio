@@ -98,21 +98,18 @@ UV_EXTERN void uv_walk(uv_loop_t* loop, uv_walk_cb walk_cb, void* arg);
 UV_EXTERN void uv_close(uv_handle_t* handle, uv_close_cb close_cb);
 */
 
-void foolio__walk_cb(uv_handle_t* handle, void* arg){
-  VALUE argv[] = { Wrap(handle, 0) };
-  foolio__cb_apply(handle->loop, arg, 1, argv);
+void foolio__close_all(uv_handle_t* handle, void* arg){
+  uv_close(handle, NULL);
 }
 
 void foolio__close_cb(uv_handle_t* handle) {
-  VALUE argv[] = { Wrap(handle, 0) };
-  foolio__cb_apply(handle->loop, handle->data, 1, argv);
+  foolio__cb_apply(handle->loop, handle->data, 0, NULL);
 }
 
-VALUE foolio_walk(VALUE self, VALUE loop, VALUE cb) {
-  // fixme: memory leak!
+VALUE foolio_close_all(VALUE self, VALUE loop) {
   uv_loop_t* loop_;
   Data_Get_Struct(loop, uv_loop_t, loop_);
-  uv_walk(loop_, foolio__walk_cb, (void*)callback(cb));
+  uv_walk(loop_, foolio__close_all, NULL);
 }
 
 VALUE foolio_close(VALUE self, VALUE handle, VALUE cb) {
@@ -167,8 +164,8 @@ VALUE foolio_ip6_addr(VALUE self, VALUE ip, VALUE port) {
 }
 
 void foolio__connection_cb(uv_stream_t* server, int status) {
-  VALUE argv[] = { Wrap(server,0), INT2NUM(status) };
-  foolio__cb_apply(server->loop, server->data, 2, argv);
+  VALUE argv[] = { INT2FIX(status) };
+  foolio__cb_apply(server->loop, server->data, 1, argv);
 }
 
 // UV_EXTERN int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb)
@@ -185,14 +182,29 @@ uv_buf_t foolio__alloc(uv_handle_t* handle, size_t suggested_size) {
   return uv_buf_init((char*)malloc(suggested_size), (unsigned int)suggested_size);
 }
 
+struct MakeBufArg {
+  char* ptr;
+  ssize_t size;
+};
+
+void* foolio___make_buf(void* args) {
+  struct MakeBufArg* args_ = (struct MakeBufArg*) args;
+  return (void*)rb_str_new(args_->ptr, args_->size);
+}
+
+VALUE foolio__make_buf(char* ptr, ssize_t size) {
+  struct MakeBufArg args = { ptr, size };
+  return (VALUE)rb_thread_call_with_gvl(foolio___make_buf, &args);
+}
+
 void foolio__read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf){
-  VALUE argv[] = { Wrap(stream, 0), UINT2NUM(nread), rb_str_new(buf.base, nread) };
-  foolio__cb_apply(stream->loop, stream->data, 3, argv);
+  VALUE argv[] = { foolio__make_buf(buf.base, nread) };
+  foolio__cb_apply(stream->loop, stream->data, 1, argv);
 }
 
 void foolio__read2_cb(uv_pipe_t* pipe, ssize_t nread, uv_buf_t buf, uv_handle_type pending) {
-  VALUE argv[] = { Wrap(pipe, 0), UINT2NUM(nread), rb_str_new(buf.base, nread), INT2NUM(pending) };
-  foolio__cb_apply(pipe->loop, pipe->data, 4, argv);
+  VALUE argv[] = { foolio__make_buf(buf.base, nread), INT2FIX(pending) };
+  foolio__cb_apply(pipe->loop, pipe->data, 2, argv);
 }
 
 // UV_EXTERN int uv_read_start(uv_stream_t*, uv_alloc_cb alloc_cb, uv_read_cb read_cb)
@@ -225,8 +237,8 @@ VALUE foolio_read2_start(VALUE self, VALUE stream, VALUE read_cb) {
 }
 
 void foolio__write_cb(uv_write_t* req, int status){
-  VALUE argv[] = { Wrap(req, 0), INT2NUM(status) };
-  foolio__cb_apply(req->handle->loop, req->handle->data, 2, argv);
+  VALUE argv[] = { INT2FIX(status) };
+  foolio__cb_apply(req->handle->loop, req->handle->data, 1, argv);
 }
 
 // UV_EXTERN int uv_write(uv_write_t* req, uv_stream_t* handle, uv_buf_t bufs[], int bufcnt, uv_write_cb cb)
@@ -379,8 +391,8 @@ VALUE foolio_udp_set_ttl(VALUE self, VALUE handle, VALUE ttl) {
 }
 
 void foolio__udp_send_cb(uv_udp_send_t* req, int status) {
-  VALUE argv[] = { Wrap(req, 0), INT2NUM(status) };
-  foolio__cb_apply(req->handle->loop, req->handle->data, 2, argv);
+  VALUE argv[] = { INT2FIX(status) };
+  foolio__cb_apply(req->handle->loop, req->handle->data, 1 , argv);
 }
 
 // UV_EXTERN int uv_udp_send(uv_udp_send_t* req, uv_udp_t* handle, uv_buf_t bufs[], int bufcnt, struct sockaddr_in addr, uv_udp_send_cb send_cb)
@@ -581,8 +593,8 @@ VALUE foolio_idle_init(VALUE self, VALUE loop) {
 }
 
 void foolio__idle_cb(uv_idle_t* handle, int status) {
-  VALUE argv[] = { Wrap(handle,0) , INT2NUM(status) };
-  foolio__cb_apply(handle->loop, handle->data, 2, argv);
+  VALUE argv[] = { INT2FIX(status) };
+  foolio__cb_apply(handle->loop, handle->data,1, argv);
 }
 
 VALUE foolio_idle_start(VALUE self, VALUE idle, VALUE cb) {
@@ -667,7 +679,7 @@ void Init_foolio_ext(void) {
   Method(default_loop, 0);
   Method(loop_new, 0);
   Method(loop_delete, 1);
-  Method(walk, 2);
+  Method(close_all, 2);
   Method(close, 2);
   Method(is_active, 1);
   Method(run, 1);
