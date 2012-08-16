@@ -10,14 +10,14 @@ void *  rb_thread_call_with_gvl(void *(*func)(void *), void *data1);
   uv_##T##_t * T##_p; \
   Data_Get_Struct(T, uv_##T##_t, T##_p)
 
-#define InitHandle(T)       \
+#define InitHandle(T)                                \
   uv_##T##_t * handle = malloc(sizeof(uv_##T##_t));  \
-  Decl(loop);      \
-  if( uv_##T##_init(loop_p, handle) == 0) {   \
-    return Wrap(handle, free);    \
-  } else {                        \
-    return Qnil;                  \
-  }                               \
+  Decl(loop);                                        \
+  if( uv_##T##_init(loop_p, handle) == 0) {          \
+    return Data_Wrap_Struct(klass, 0, 0, handle);    \
+  } else {                                           \
+    return Qnil;                                     \
+  }                                                  \
 
 #define CHECK(X) \
   if(X == -1) { \
@@ -45,7 +45,6 @@ struct CallbackData* callback(VALUE cb) {
   data->cb = cb;
   data->argc = 0;
   data->argv = NULL;
-  rb_gc_register_address(&cb);
   return data;
 }
 
@@ -77,7 +76,6 @@ static void foolio__cb_apply(uv_loop_t* loop, struct CallbackData* data, int arg
 }
 
 void foolio__cb_free(struct CallbackData* data) {
-  rb_gc_unregister_address(&data->cb);
   free(data);
 }
 
@@ -104,15 +102,18 @@ typedef void (*uv_close_cb)(uv_handle_t* handle);
 UV_EXTERN void uv_walk(uv_loop_t* loop, uv_walk_cb walk_cb, void* arg);
 UV_EXTERN void uv_close(uv_handle_t* handle, uv_close_cb close_cb);
 */
-
-void foolio__close_all(uv_handle_t* handle, void* arg){
-  if(!uv_is_closing(handle)) {
-    uv_close(handle, NULL);
-  }
+void foolio__close_cb(uv_handle_t* handle) {
+  foolio__cb_free(handle->data);
+  free(handle);
 }
 
-void foolio__close_cb(uv_handle_t* handle) {
-  foolio__cb_apply(handle->loop, handle->data, 0, NULL);
+void foolio__close(uv_handle_t* handle) {
+  if(!uv_is_closing(handle)){ return; }
+  uv_close(handle, foolio__close_cb);
+}
+
+void foolio__close_all(uv_handle_t* handle, void* arg){
+  foolio__close(handle);
 }
 
 VALUE foolio_close_all(VALUE self, VALUE loop) {
@@ -121,16 +122,10 @@ VALUE foolio_close_all(VALUE self, VALUE loop) {
   uv_walk(loop_, foolio__close_all, NULL);
 }
 
-VALUE foolio_close(VALUE self, VALUE handle, VALUE cb) {
-  // fixme: memory leak!
+VALUE foolio_close(VALUE self, VALUE handle) {
   uv_handle_t* handle_;
   Data_Get_Struct(handle, uv_handle_t, handle_);
-
-  if(!uv_is_closing(handle_)){ return Qnil; }
-
-  foolio__cb_free(handle_->data);
-  handle_->data = callback(cb);
-  uv_close(handle_, foolio__close_cb);
+  foolio__close(handle_);
 }
 
 VALUE foolio_is_active(VALUE handle) {
@@ -140,8 +135,6 @@ VALUE foolio_is_active(VALUE handle) {
   CHECK(retval);
   return INT2NUM(retval);
 }
-
-
 
 // ------------------------------
 // run
