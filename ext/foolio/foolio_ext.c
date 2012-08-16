@@ -104,7 +104,9 @@ UV_EXTERN void uv_close(uv_handle_t* handle, uv_close_cb close_cb);
 */
 
 void foolio__close_all(uv_handle_t* handle, void* arg){
-  uv_close(handle, NULL);
+  if(!uv_is_closing(handle)) {
+    uv_close(handle, NULL);
+  }
 }
 
 void foolio__close_cb(uv_handle_t* handle) {
@@ -121,6 +123,9 @@ VALUE foolio_close(VALUE self, VALUE handle, VALUE cb) {
   // fixme: memory leak!
   uv_handle_t* handle_;
   Data_Get_Struct(handle, uv_handle_t, handle_);
+
+  if(!uv_is_closing(handle_)){ return Qnil; }
+
   foolio__cb_free(handle_->data);
   handle_->data = callback(cb);
   uv_close(handle_, foolio__close_cb);
@@ -251,6 +256,7 @@ VALUE foolio__make_buf(char* ptr, ssize_t size) {
   if(size == -1) {
     return Qnil;
   } else {
+    free(ptr);
     return (VALUE)rb_thread_call_with_gvl(foolio___make_buf, &args);
   }
 }
