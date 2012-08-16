@@ -91,6 +91,45 @@ VALUE foolio_loop_delete(VALUE self, VALUE loop) {
   return Qnil;
 }
 
+/*
+typedef void (*uv_walk_cb)(uv_handle_t* handle, void* arg);
+typedef void (*uv_close_cb)(uv_handle_t* handle);
+UV_EXTERN void uv_walk(uv_loop_t* loop, uv_walk_cb walk_cb, void* arg);
+UV_EXTERN void uv_close(uv_handle_t* handle, uv_close_cb close_cb);
+*/
+
+void foolio__close_all(uv_handle_t* handle, void* arg){
+  uv_close(handle, NULL);
+}
+
+void foolio__close_cb(uv_handle_t* handle) {
+  foolio__cb_apply(handle->loop, handle->data, 0, NULL);
+}
+
+VALUE foolio_close_all(VALUE self, VALUE loop) {
+  uv_loop_t* loop_;
+  Data_Get_Struct(loop, uv_loop_t, loop_);
+  uv_walk(loop_, foolio__close_all, NULL);
+}
+
+VALUE foolio_close(VALUE self, VALUE handle, VALUE cb) {
+  // fixme: memory leak!
+  uv_handle_t* handle_;
+  Data_Get_Struct(handle, uv_handle_t, handle_);
+  foolio__cb_free(handle_->data);
+  handle_->data = callback(cb);
+  uv_close(handle_, foolio__close_cb);
+}
+
+VALUE foolio_is_active(VALUE handle) {
+  uv_handle_t* handle_;
+  Data_Get_Struct(handle, uv_handle_t, handle_);
+  int retval = uv_is_active(handle_);
+  return INT2NUM(retval);
+}
+
+
+
 // ------------------------------
 // run
 // ------------------------------
@@ -168,6 +207,8 @@ VALUE foolio_read_stop(VALUE self, VALUE stream) {
   uv_stream_t* stream_;
   Data_Get_Struct(stream, uv_stream_t, stream_);
   int retval = uv_read_stop(stream_);
+  foolio__cb_free(stream_->data);
+  stream_->data = NULL;
   return NUM2INT(retval);
 }
 
@@ -548,6 +589,7 @@ VALUE foolio_idle_start(VALUE self, VALUE idle, VALUE cb) {
 VALUE foolio_idle_stop(VALUE self, VALUE idle) {
   Decl(idle);
   foolio__cb_free(idle_p->data);
+  idle_p->data = NULL;
   uv_idle_stop(idle_p);
 }
 
@@ -579,6 +621,7 @@ VALUE foolio_timer_start(VALUE self, VALUE timer, VALUE cb, VALUE timeout, VALUE
 VALUE foolio_timer_stop(VALUE self, VALUE timer) {
   Decl(timer);
   foolio__cb_free(timer_p->data);
+  timer_p->data = NULL;
   return INT2FIX(uv_timer_stop(timer_p));
 }
 
@@ -619,6 +662,9 @@ void Init_foolio_ext(void) {
   Method(default_loop, 0);
   Method(loop_new, 0);
   Method(loop_delete, 1);
+  Method(close_all, 1);
+  Method(close, 2);
+  Method(is_active, 1);
   Method(run, 1);
   Method(run_once, 1);
   Method(ip4_addr, 2);
