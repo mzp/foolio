@@ -667,6 +667,7 @@ void Init_foolio_ext(void) {
   Method(loop_delete, 1);
   Method(walk, 2);
   Method(close, 2);
+  Method(is_active, 1);
   Method(run, 1);
   Method(run_once, 1);
   Method(ip4_addr, 2);
