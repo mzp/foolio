@@ -89,6 +89,39 @@ VALUE foolio_loop_delete(VALUE self, VALUE loop) {
   return Qnil;
 }
 
+/*
+typedef void (*uv_walk_cb)(uv_handle_t* handle, void* arg);
+typedef void (*uv_close_cb)(uv_handle_t* handle);
+UV_EXTERN void uv_walk(uv_loop_t* loop, uv_walk_cb walk_cb, void* arg);
+UV_EXTERN void uv_close(uv_handle_t* handle, uv_close_cb close_cb);
+*/
+
+void foolio__walk_cb(uv_handle_t* handle, void* arg){
+  VALUE argv[] = { Wrap(handle, 0) };
+  foolio__cb_apply(handle->loop, arg, 1, argv);
+}
+
+void foolio__close_cb(uv_handle_t* handle) {
+  VALUE argv[] = { Wrap(handle, 0) };
+  foolio__cb_apply(handle->loop, handle->data, 1, argv);
+}
+
+VALUE foolio_walk(VALUE loop, VALUE cb) {
+  // fixme: memory leak!
+  uv_loop_t* loop_;
+  Data_Get_Struct(loop, uv_loop_t, loop_);
+  uv_walk(loop_, foolio__walk_cb, (void*)callback(cb));
+}
+
+VALUE foolio_close(VALUE handle, VALUE cb) {
+  // fixme: memory leak!
+  uv_handle_t* handle_;
+  Data_Get_Struct(handle, uv_handle_t, handle_);
+  foolio__cb_free(handle_->data);
+  handle_->data = callback(cb);
+  uv_close(handle_, foolio__close_cb);
+}
+
 // ------------------------------
 // run
 // ------------------------------
@@ -166,6 +199,8 @@ VALUE foolio_read_stop(VALUE self, VALUE stream) {
   uv_stream_t* stream_;
   Data_Get_Struct(stream, uv_stream_t, stream_);
   int retval = uv_read_stop(stream_);
+  foolio__cb_free(stream_->data);
+  stream_->data = NULL;
   return NUM2INT(retval);
 }
 
@@ -400,6 +435,8 @@ VALUE foolio_udp_recv_stop(VALUE self, VALUE handle) {
   uv_udp_t* handle_;
   Data_Get_Struct(handle, uv_udp_t, handle_);
   int retval = uv_udp_recv_stop(handle_);
+  foolio__cb_free(handle_->data);
+  handle_->data = NULL;
   return INT2NUM(retval);
 }
 
@@ -546,6 +583,7 @@ VALUE foolio_idle_start(VALUE self, VALUE idle, VALUE cb) {
 VALUE foolio_idle_stop(VALUE self, VALUE idle) {
   Decl(idle);
   foolio__cb_free(idle_p->data);
+  idle_p->data = NULL;
   uv_idle_stop(idle_p);
 }
 
@@ -577,6 +615,7 @@ VALUE foolio_timer_start(VALUE self, VALUE timer, VALUE cb, VALUE timeout, VALUE
 VALUE foolio_timer_stop(VALUE self, VALUE timer) {
   Decl(timer);
   foolio__cb_free(timer_p->data);
+  timer_p->data = NULL;
   return INT2FIX(uv_timer_stop(timer_p));
 }
 
