@@ -19,6 +19,11 @@ void *  rb_thread_call_with_gvl(void *(*func)(void *), void *data1);
     return Qnil;                  \
   }                               \
 
+#define CHECK(X) \
+  if(X == -1) { \
+    rb_raise(rb_eException, "libuv failed by %s", uv_strerror(uv_last_error(handle_->loop))); \
+  }
+
 // Foolio::UV class
 VALUE klass;
 
@@ -125,6 +130,7 @@ VALUE foolio_is_active(VALUE handle) {
   uv_handle_t* handle_;
   Data_Get_Struct(handle, uv_handle_t, handle_);
   int retval = uv_is_active(handle_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -157,6 +163,41 @@ VALUE foolio_ip4_addr(VALUE self, VALUE ip, VALUE port) {
   return Wrap(p, free);
 }
 
+VALUE foolio_ip_name(VALUE self, VALUE src) {
+  struct sockaddr_in* addr_;
+  Data_Get_Struct(src, struct sockaddr_in, addr_);
+  if(addr_->sin_family == AF_INET6) {
+    char str[INET6_ADDRSTRLEN];
+    uv_ip6_name((struct sockaddr_in6*)addr_, str, INET_ADDRSTRLEN);
+    return rb_str_new_cstr(str);
+  } else {
+    char str[INET_ADDRSTRLEN];
+    uv_ip4_name(addr_, str, INET_ADDRSTRLEN);
+    return rb_str_new_cstr(str);
+  }
+}
+
+VALUE foolio_port(VALUE self, VALUE src) {
+  struct sockaddr_in* addr_;
+  Data_Get_Struct(src, struct sockaddr_in, addr_);
+  if(addr_->sin_family == AF_INET6) {
+    int port  = ntohs(((struct sockaddr_in6*)addr_)->sin6_port);
+    return INT2FIX(port);
+  } else {
+    int port  = ntohs(addr_->sin_port);
+    return INT2FIX(port);
+  }
+}
+
+/*VALUE foolio_ip6_name(VALUE self, VALUE src) {
+  struct sockaddr_in6* addr_;
+  Data_Get_Struct(addr, struct sockaddr_in6, addr_);
+  char str[INET_ADDRSTRLEN];
+  uv_ip4_name(addr_, str, INET_ADDRSTRLEN);
+  return rb_str_new_cstr(str);
+  }*/
+
+
 VALUE foolio_ip6_addr(VALUE self, VALUE ip, VALUE port) {
   struct sockaddr_in6* p = malloc(sizeof(struct sockaddr_in6));
   *p = uv_ip6_addr((const char*)StringValueCStr(ip), NUM2INT(port));
@@ -170,12 +211,25 @@ void foolio__connection_cb(uv_stream_t* server, int status) {
 
 // UV_EXTERN int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb)
 VALUE foolio_listen(VALUE self, VALUE stream, VALUE backlog, VALUE cb) {
-  uv_stream_t* stream_;
-  Data_Get_Struct(stream, uv_stream_t, stream_);
+  uv_stream_t* handle_;
+  Data_Get_Struct(stream, uv_stream_t, handle_);
   int backlog_ = NUM2INT(backlog);
-  stream_->data = (void*)callback(cb);
-  int retval = uv_listen(stream_, backlog_, foolio__connection_cb);
-  return INT2NUM(retval);
+  handle_->data = (void*)callback(cb);
+  int retval = uv_listen(handle_, backlog_, foolio__connection_cb);
+  CHECK(retval);
+  return INT2FIX(retval);
+}
+
+// EXTERN int uv_accept(uv_stream_t* server, uv_stream_t* client);
+VALUE foolio_accept(VALUE self, VALUE handle, VALUE client) {
+  uv_stream_t* handle_;
+  Data_Get_Struct(handle, uv_stream_t, handle_);
+  uv_stream_t* client_;
+  Data_Get_Struct(client, uv_stream_t, client_);
+  //uv_stream_t* server, uv_stream_t* client) {
+  int retval = uv_accept(handle_, client_);
+  CHECK(retval);
+  return INT2FIX(retval);
 }
 
 uv_buf_t foolio__alloc(uv_handle_t* handle, size_t suggested_size) {
@@ -210,29 +264,32 @@ void foolio__read2_cb(uv_pipe_t* pipe, ssize_t nread, uv_buf_t buf, uv_handle_ty
 // UV_EXTERN int uv_read_start(uv_stream_t*, uv_alloc_cb alloc_cb, uv_read_cb read_cb)
 static VALUE foolio_read_start(VALUE self, VALUE stream, VALUE read_cb) {
   //  uv_stream_t*;
-  uv_stream_t* stream_;
-  Data_Get_Struct(stream, uv_stream_t, stream_);
-  stream_->data = (void*)callback(read_cb);
-  int retval = uv_read_start(stream_, foolio__alloc, foolio__read_cb);
+  uv_stream_t* handle_;
+  Data_Get_Struct(stream, uv_stream_t, handle_);
+  handle_->data = (void*)callback(read_cb);
+  int retval = uv_read_start(handle_, foolio__alloc, foolio__read_cb);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
 // UV_EXTERN int uv_read_stop(uv_stream_t*)
 VALUE foolio_read_stop(VALUE self, VALUE stream) {
-  uv_stream_t* stream_;
-  Data_Get_Struct(stream, uv_stream_t, stream_);
-  int retval = uv_read_stop(stream_);
-  foolio__cb_free(stream_->data);
-  stream_->data = NULL;
+  uv_stream_t* handle_;
+  Data_Get_Struct(stream, uv_stream_t, handle_);
+  int retval = uv_read_stop(handle_);
+  foolio__cb_free(handle_->data);
+  handle_->data = NULL;
+  CHECK(retval);
   return NUM2INT(retval);
 }
 
 // UV_EXTERN int uv_read2_start(uv_stream_t*, uv_alloc_cb alloc_cb, uv_read2_cb read_cb)
 VALUE foolio_read2_start(VALUE self, VALUE stream, VALUE read_cb) {
-  uv_stream_t* stream_;
-  Data_Get_Struct(stream, uv_stream_t, stream_);
-  stream_->data = (void*)callback(read_cb);
-  int retval = uv_read2_start(stream_, foolio__alloc, foolio__read2_cb);
+  uv_stream_t* handle_;
+  Data_Get_Struct(stream, uv_stream_t, handle_);
+  handle_->data = (void*)callback(read_cb);
+  int retval = uv_read2_start(handle_, foolio__alloc, foolio__read2_cb);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -257,6 +314,7 @@ VALUE foolio_write(VALUE self, VALUE req, VALUE handle, VALUE buf, VALUE cb) {
   };
   handle_->data = (void*)callback(cb);
   int retval = uv_write(req_, handle_, bufs, 1, foolio__write_cb);
+  CHECK(retval);
   return retval == 0 ? req : Qnil;
 }
 
@@ -286,6 +344,7 @@ VALUE foolio_is_readable(VALUE self, VALUE handle) {
   const uv_stream_t* handle_;
   Data_Get_Struct(handle, const uv_stream_t, handle_);
   int retval = uv_is_readable(handle_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -294,6 +353,7 @@ VALUE foolio_is_writable(VALUE self, VALUE handle) {
   const uv_stream_t* handle_;
   Data_Get_Struct(handle, const uv_stream_t, handle_);
   int retval = uv_is_writable(handle_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -302,6 +362,7 @@ VALUE foolio_is_closing(VALUE self, VALUE handle) {
   const uv_handle_t* handle_;
   Data_Get_Struct(handle, const uv_handle_t, handle_);
   int retval = uv_is_closing(handle_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -318,6 +379,7 @@ VALUE foolio_udp_bind(VALUE self, VALUE handle, VALUE addr, VALUE flags) {
   Data_Get_Struct(addr, struct sockaddr_in, addr_);
   unsigned int flags_ = NUM2UINT(flags);
   int retval = uv_udp_bind(handle_, *addr_, flags_);
+    CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -329,6 +391,7 @@ VALUE foolio_udp_bind6(VALUE self, VALUE handle, VALUE addr, VALUE flags) {
   Data_Get_Struct(addr, struct sockaddr_in6, addr_);
   unsigned int flags_ = NUM2UINT(flags);
   int retval = uv_udp_bind6(handle_, *addr_, flags_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -339,6 +402,7 @@ VALUE foolio_udp_getsockname(VALUE self, VALUE handle, VALUE name, VALUE namelen
   struct sockaddr* name_ = malloc(sizeof(struct sockaddr));
   int size;
   int retval = uv_udp_getsockname(handle_, name_, &size);
+  CHECK(retval);
   return Wrap(name_, free);
 }
 
@@ -350,6 +414,7 @@ VALUE foolio_udp_set_membership(VALUE self, VALUE handle, VALUE multicast_addr, 
   const char* interface_addr_ = StringValueCStr(interface_addr);
   uv_membership membership_ =  NUM2INT(membership);
   int retval = uv_udp_set_membership(handle_, multicast_addr_, interface_addr_, membership_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -359,6 +424,7 @@ VALUE foolio_udp_set_multicast_loop(VALUE self, VALUE handle, VALUE on) {
   Data_Get_Struct(handle, uv_udp_t, handle_);
   int on_ = NUM2INT(on);
   int retval = uv_udp_set_multicast_loop(handle_, on_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -369,6 +435,7 @@ VALUE foolio_udp_set_multicast_ttl(VALUE self, VALUE handle, VALUE ttl) {
   Data_Get_Struct(handle, uv_udp_t, handle_);
   int ttl_ = NUM2INT(ttl);
   int retval = uv_udp_set_multicast_ttl(handle_, ttl_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -378,6 +445,7 @@ VALUE foolio_udp_set_broadcast(VALUE self, VALUE handle, VALUE on) {
   Data_Get_Struct(handle, uv_udp_t, handle_);
   int on_ = NUM2INT(on);
   int retval = uv_udp_set_broadcast(handle_, on_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -387,6 +455,7 @@ VALUE foolio_udp_set_ttl(VALUE self, VALUE handle, VALUE ttl) {
   Data_Get_Struct(handle, uv_udp_t, handle_);
   int ttl_ = NUM2INT(ttl);
   int retval = uv_udp_set_ttl(handle_, ttl_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -414,6 +483,7 @@ VALUE foolio_udp_send(VALUE self, VALUE req, VALUE handle, VALUE buf, VALUE addr
   };
   handle_->data = (void*)callback(send_cb);
   int retval = uv_udp_send(req_, handle_, bufs, 1 , *addr_, foolio__udp_send_cb);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -436,20 +506,32 @@ VALUE foolio_udp_send6(VALUE self, VALUE req, VALUE handle, VALUE buf, VALUE add
   Data_Get_Struct(addr, struct sockaddr_in6, addr_);
   handle_->data = (void*)callback(send_cb);
   int retval = uv_udp_send6(req_, handle_, bufs, 1, *addr_, foolio__udp_send_cb);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
+void* safe__wrap(void* ptr) {
+  return (void*)Wrap(ptr, NULL);
+}
+VALUE safe_wrap(void* ptr) {
+  return (VALUE)rb_thread_call_with_gvl(safe__wrap, ptr);
+}
+
 void foolio__udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* addr, unsigned int flags) {
-  VALUE argv[] = { Wrap(handle, 0), UINT2NUM(nread), rb_str_new(buf.base, nread), Wrap(addr, 0), UINT2NUM(flags) };
-  foolio__cb_apply(handle->loop, handle->data, 5, argv);
+  VALUE argv[] = {
+    foolio__make_buf(buf.base, nread),
+    safe_wrap((void*)addr),
+    INT2FIX(flags) };
+  foolio__cb_apply(handle->loop, handle->data, 3, argv);
 }
 
 // UV_EXTERN int uv_udp_recv_start(uv_udp_t* handle, uv_alloc_cb alloc_cb, uv_udp_recv_cb recv_cb)
-VALUE foolio_udp_recv_start(VALUE self, VALUE handle, VALUE alloc_cb, VALUE recv_cb) {
+VALUE foolio_udp_recv_start(VALUE self, VALUE handle, VALUE recv_cb) {
   uv_udp_t* handle_;
   Data_Get_Struct(handle, uv_udp_t, handle_);
   handle_->data = (void*)callback(recv_cb);
   int retval = uv_udp_recv_start(handle_, foolio__alloc, foolio__udp_recv_cb);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -460,6 +542,7 @@ VALUE foolio_udp_recv_stop(VALUE self, VALUE handle) {
   int retval = uv_udp_recv_stop(handle_);
   foolio__cb_free(handle_->data);
   handle_->data = NULL;
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -482,6 +565,7 @@ VALUE foolio_tcp_nodelay(VALUE self, VALUE handle, VALUE enable) {
   Data_Get_Struct(handle, uv_tcp_t, handle_);
   int enable_ = NUM2INT(enable);
   int retval = uv_tcp_nodelay(handle_, enable_);
+  CHECK(retval);
   return Qnil;
 }
 
@@ -492,6 +576,7 @@ VALUE foolio_tcp_keepalive(VALUE self, VALUE handle, VALUE enable, VALUE delay) 
   int enable_ = NUM2INT(enable);
   unsigned int delay_ = NUM2UINT(delay);
   int retval = uv_tcp_keepalive(handle_, enable_, delay_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -501,6 +586,7 @@ VALUE foolio_tcp_simultaneous_accepts(VALUE self, VALUE handle, VALUE enable) {
   Data_Get_Struct(handle, uv_tcp_t, handle_);
   int enable_ = NUM2INT(enable);
   int retval = uv_tcp_simultaneous_accepts(handle_, enable_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -511,6 +597,7 @@ VALUE foolio_tcp_bind(VALUE self, VALUE handle, VALUE sockaddr_in) {
   struct sockaddr_in* sockaddr_in_;
   Data_Get_Struct(sockaddr_in, struct sockaddr_in, sockaddr_in_);
   int retval = uv_tcp_bind(handle_, *sockaddr_in_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -522,6 +609,7 @@ VALUE foolio_tcp_bind6(VALUE self, VALUE handle, VALUE sockaddr_in6) {
   Data_Get_Struct(sockaddr_in6, struct sockaddr_in6, sockaddr_in6_);
 
   int retval = uv_tcp_bind6(handle_, *sockaddr_in6_);
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
@@ -532,6 +620,7 @@ VALUE foolio_tcp_getsockname(VALUE self, VALUE handle) {
   struct sockaddr* name_ = malloc(sizeof(struct sockaddr));
   int size;
   int retval = uv_tcp_getsockname(handle_, name_, &size);
+  CHECK(retval);
   return Wrap(name_, free);
 }
 
@@ -542,6 +631,7 @@ VALUE foolio_tcp_getpeername(VALUE self, VALUE handle, VALUE name, VALUE namelen
   struct sockaddr* name_ = malloc(sizeof(struct sockaddr));
   int size;
   int retval = uv_tcp_getpeername(handle_, name_, &size);
+  CHECK(retval);
   return Wrap(name_, free);
 }
 
@@ -565,6 +655,7 @@ VALUE foolio_tcp_connect(VALUE self, VALUE req, VALUE handle, VALUE address, VAL
   Data_Get_Struct(address, struct sockaddr_in, address_);
   handle_->data = (void*)callback(cb);
   int retval = uv_tcp_connect(req_, handle_, *address_, foolio__connect_cb);
+  CHECK(retval);
   return req;
 }
 
@@ -583,6 +674,7 @@ VALUE foolio_tcp_connect6(VALUE self, VALUE req, VALUE handle, VALUE address, VA
   Data_Get_Struct(address, struct sockaddr_in6, address_);
   req_->data = (void*)callback(cb);
   int retval = uv_tcp_connect6(req_, handle_, *address_, foolio__connect_cb);
+  CHECK(retval);
   return req;
 }
 
@@ -600,17 +692,23 @@ void foolio__idle_cb(uv_idle_t* handle, int status) {
   foolio__cb_apply(handle->loop, handle->data,1, argv);
 }
 
-VALUE foolio_idle_start(VALUE self, VALUE idle, VALUE cb) {
-  Decl(idle);
-  idle_p->data = callback(cb);
-  uv_idle_start(idle_p, foolio__idle_cb);
+VALUE foolio_idle_start(VALUE self, VALUE handle, VALUE cb) {
+  uv_idle_t* handle_;
+  Data_Get_Struct(handle, uv_idle_t, handle_);
+  handle_->data = callback(cb);
+  int retval = uv_idle_start(handle_, foolio__idle_cb);
+  CHECK(retval);
+  return INT2FIX(retval);
 }
 
-VALUE foolio_idle_stop(VALUE self, VALUE idle) {
-  Decl(idle);
-  foolio__cb_free(idle_p->data);
-  idle_p->data = NULL;
-  uv_idle_stop(idle_p);
+VALUE foolio_idle_stop(VALUE self, VALUE handle) {
+  uv_idle_t* handle_;
+  Data_Get_Struct(handle, uv_idle_t, handle_);
+  foolio__cb_free(handle_->data);
+  handle_->data = NULL;
+  int retval = uv_idle_stop(handle_);
+  CHECK(retval);
+  return INT2FIX(retval);
 }
 
 /**
@@ -630,30 +728,39 @@ static void timer_callback(uv_timer_t* handle, int status) {
   foolio__cb_apply(handle->loop, handle->data, 1, argv);
 }
 
-VALUE foolio_timer_start(VALUE self, VALUE timer, VALUE cb, VALUE timeout, VALUE repeat) {
-  Decl(timer);
-  timer_p->data = (void*)callback(cb);
+VALUE foolio_timer_start(VALUE self, VALUE handle, VALUE cb, VALUE timeout, VALUE repeat) {
+  uv_timer_t* handle_;
+  Data_Get_Struct(handle, uv_timer_t, handle_);
+  handle_->data = (void*)callback(cb);
   int retval =
-    uv_timer_start(timer_p, timer_callback, NUM2INT(timeout), NUM2INT(repeat));
+    uv_timer_start(handle_, timer_callback, NUM2INT(timeout), NUM2INT(repeat));
+  CHECK(retval);
   return INT2NUM(retval);
 }
 
-VALUE foolio_timer_stop(VALUE self, VALUE timer) {
-  Decl(timer);
-  foolio__cb_free(timer_p->data);
-  timer_p->data = NULL;
-  return INT2FIX(uv_timer_stop(timer_p));
+VALUE foolio_timer_stop(VALUE self, VALUE handle) {
+  uv_timer_t* handle_;
+  Data_Get_Struct(handle, uv_timer_t, handle_);
+  int retval = uv_timer_stop(handle_);
+  foolio__cb_free(handle_->data);
+  handle_->data = NULL;
+  CHECK(retval);
+  return INT2FIX(retval);
 }
 
-VALUE foolio_timer_again(VALUE self, VALUE timer) {
-  Decl(timer);
-  return INT2FIX(uv_timer_again(timer_p));
+VALUE foolio_timer_again(VALUE self, VALUE handle) {
+  uv_timer_t* handle_;
+  Data_Get_Struct(handle, uv_timer_t, handle_);
+  int retval = uv_timer_again(handle_);
+  CHECK(retval);
+  return INT2FIX(retval);
 }
 
-VALUE foolio_timer_set_repeat(VALUE self, VALUE timer, VALUE repeat) {
-  Decl(timer);
+VALUE foolio_timer_set_repeat(VALUE self, VALUE handle, VALUE repeat) {
+  uv_timer_t* handle_;
+  Data_Get_Struct(handle, uv_timer_t, handle_);
   int64_t repeat_n = NUM2LONG(repeat);
-  uv_timer_set_repeat(timer_p, repeat);
+  uv_timer_set_repeat(handle_, repeat);
   return Qnil;
 }
 
@@ -689,7 +796,11 @@ void Init_foolio_ext(void) {
   Method(run_once, 1);
   Method(ip4_addr, 2);
   Method(ip6_addr, 2);
+  Method(ip_name, 1);
+  Method(port, 1);
   Method(listen, 3);
+  Method(accept, 2);
+  Method(read_start, 2);
   Method(read_stop, 1);
   Method(read2_start, 2);
   Method(write, 4);
@@ -708,7 +819,7 @@ void Init_foolio_ext(void) {
   Method(udp_set_ttl, 2);
   Method(udp_send, 5);
   Method(udp_send6, 5);
-  Method(udp_recv_start, 3);
+  Method(udp_recv_start, 2);
   Method(udp_recv_stop, 1);
   Method(tcp_init, 1);
   Method(tcp_nodelay, 2);
