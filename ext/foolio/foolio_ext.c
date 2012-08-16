@@ -623,8 +623,8 @@ VALUE foolio_timer_init(VALUE self, VALUE loop) {
 }
 
 static void timer_callback(uv_timer_t* handle, int status) {
-  VALUE argv[] = { Wrap(handle,0) , INT2NUM(status) };
-  foolio__cb_apply(handle->loop, handle->data, 2, argv);
+  VALUE argv[] = { INT2NUM(status) };
+  foolio__cb_apply(handle->loop, handle->data, 1, argv);
 }
 
 VALUE foolio_timer_start(VALUE self, VALUE timer, VALUE cb, VALUE timeout, VALUE repeat) {
