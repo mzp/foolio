@@ -64,7 +64,9 @@ static void foolio__cb_apply(uv_loop_t* loop, struct CallbackData* data, int arg
   } else {
     // All callback function are run without gvl.
     // But we need GVL to call Ruby methods.
+    p->gvl = true;
     rb_thread_call_with_gvl(foolio__cb__apply, (void*)data);
+    p->gvl = false;
   }
 }
 
