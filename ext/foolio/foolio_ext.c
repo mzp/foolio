@@ -580,7 +580,7 @@ VALUE foolio_idle_init(VALUE self, VALUE loop) {
   InitHandle(idle);
 }
 
-static void idle_callback(uv_idle_t* handle, int status) {
+void foolio__idle_cb(uv_idle_t* handle, int status) {
   VALUE argv[] = { Wrap(handle,0) , INT2NUM(status) };
   foolio__cb_apply(handle->loop, handle->data, 2, argv);
 }
@@ -588,7 +588,7 @@ static void idle_callback(uv_idle_t* handle, int status) {
 VALUE foolio_idle_start(VALUE self, VALUE idle, VALUE cb) {
   Decl(idle);
   idle_p->data = callback(cb);
-  uv_idle_start(idle_p, idle_callback);
+  uv_idle_start(idle_p, foolio__idle_cb);
 }
 
 VALUE foolio_idle_stop(VALUE self, VALUE idle) {
