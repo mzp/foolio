@@ -99,9 +99,7 @@ UV_EXTERN void uv_close(uv_handle_t* handle, uv_close_cb close_cb);
 */
 
 void foolio__close_all(uv_handle_t* handle, void* arg){
-  if(uv_is_acive(handle)) {
-    uv_close(handle, NULL);
-  }
+  uv_close(handle, NULL);
 }
 
 void foolio__close_cb(uv_handle_t* handle) {
