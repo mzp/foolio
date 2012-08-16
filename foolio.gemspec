@@ -5,7 +5,7 @@ Gem::Specification.new do |gem|
   gem.authors       = ["mzp"]
   gem.email         = ["mzpppp@gmail.com"]
   gem.description   = "Wow"
-  gem.summary       = "Wow'
+  gem.summary       = "Wow"
   gem.homepage      = ""
 
   gem.files         = `git ls-files`.split($\)
