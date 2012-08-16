@@ -106,14 +106,14 @@ void foolio__close_cb(uv_handle_t* handle) {
   foolio__cb_apply(handle->loop, handle->data, 1, argv);
 }
 
-VALUE foolio_walk(VALUE loop, VALUE cb) {
+VALUE foolio_walk(VALUE self, VALUE loop, VALUE cb) {
   // fixme: memory leak!
   uv_loop_t* loop_;
   Data_Get_Struct(loop, uv_loop_t, loop_);
   uv_walk(loop_, foolio__walk_cb, (void*)callback(cb));
 }
 
-VALUE foolio_close(VALUE handle, VALUE cb) {
+VALUE foolio_close(VALUE self, VALUE handle, VALUE cb) {
   // fixme: memory leak!
   uv_handle_t* handle_;
   Data_Get_Struct(handle, uv_handle_t, handle_);
@@ -656,6 +656,8 @@ void Init_foolio_ext(void) {
   Method(default_loop, 0);
   Method(loop_new, 0);
   Method(loop_delete, 1);
+  Method(walk, 2);
+  Method(close, 2);
   Method(run, 1);
   Method(run_once, 1);
   Method(ip4_addr, 2);
