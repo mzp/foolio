@@ -177,6 +177,7 @@ VALUE foolio_ip4_addr(VALUE self, VALUE ip, VALUE port) {
 VALUE foolio_ip_name(VALUE self, VALUE src) {
   struct sockaddr_in* addr_;
   Data_Get_Struct(src, struct sockaddr_in, addr_);
+  if(addr_ == NULL) { return Qnil; }
   if(addr_->sin_family == AF_INET6) {
     char str[INET6_ADDRSTRLEN];
     uv_ip6_name((struct sockaddr_in6*)addr_, str, INET_ADDRSTRLEN);
@@ -191,6 +192,7 @@ VALUE foolio_ip_name(VALUE self, VALUE src) {
 VALUE foolio_port(VALUE self, VALUE src) {
   struct sockaddr_in* addr_;
   Data_Get_Struct(src, struct sockaddr_in, addr_);
+  if(addr_ == NULL) { return Qnil; }
   if(addr_->sin_family == AF_INET6) {
     int port  = ntohs(((struct sockaddr_in6*)addr_)->sin6_port);
     return INT2FIX(port);
