@@ -799,7 +799,58 @@ VALUE foolio_fs_event_init(VALUE self, VALUE loop, VALUE filename, VALUE cb, VAL
   return Wrap(handle_, free);
 }
 
+// UV_EXTERN int uv_pipe_init(uv_loop_t*, uv_pipe_t* handle, int ipc)
+VALUE foolio_pipe_init(VALUE self, VALUE loop, VALUE ipc) {
+  uv_loop_t* loop_;
+  Data_Get_Struct(loop, uv_loop_t, loop_);
+  int ipc_ = NUM2INT(ipc);
 
+  uv_pipe_t * handle = malloc(sizeof(uv_pipe_t));
+  if( uv_pipe_init(loop_, handle, ipc_) == 0) {
+    return Data_Wrap_Struct(klass, 0, 0, handle);
+  } else {
+    return Qnil;
+  }
+}
+
+// UV_EXTERN void uv_pipe_open(uv_pipe_t*, uv_file file)
+VALUE foolio_pipe_open(VALUE self, VALUE handle, VALUE file) {
+  uv_pipe_t* handle_;
+  Data_Get_Struct(handle, uv_pipe_t, handle_);
+  uv_file file_ = NUM2INT(file);
+  uv_pipe_open(handle_, file_);
+  return Qnil;
+}
+
+// UV_EXTERN int uv_pipe_bind(uv_pipe_t* handle, const char* name)
+VALUE foolio_pipe_bind(VALUE self, VALUE handle, VALUE name) {
+  uv_pipe_t* handle_;
+  Data_Get_Struct(handle, uv_pipe_t, handle_);
+  const char* name_ = StringValueCStr(name);
+  int retval = uv_pipe_bind(handle_, name_);
+  return INT2NUM(retval);
+}
+
+// UV_EXTERN void uv_pipe_connect(uv_connect_t* req, uv_pipe_t* handle, const char* name, uv_connect_cb cb)
+VALUE foolio_pipe_connect(VALUE self, VALUE req, VALUE handle, VALUE name, VALUE cb) {
+  uv_connect_t* req_;
+  Data_Get_Struct(req, uv_connect_t, req_);
+  uv_pipe_t* handle_;
+  Data_Get_Struct(handle, uv_pipe_t, handle_);
+  const char* name_ = StringValueCStr(name);
+  handle_->data = (void*)callback(cb);
+  uv_pipe_connect(req_, handle_, name_, foolio__connect_cb);
+  return Qnil;
+}
+
+// UV_EXTERN void uv_pipe_pending_instances(uv_pipe_t* handle, int count)
+VALUE foolio_pipe_pending_instances(VALUE self, VALUE handle, VALUE count) {
+  uv_pipe_t* handle_;
+  Data_Get_Struct(handle, uv_pipe_t, handle_);
+  int count_ = NUM2INT(count);
+  uv_pipe_pending_instances(handle_, count_);
+  return Qnil;
+}
 
 void Init_foolio_ext(void) {
   klass = rb_define_class_under(rb_define_module("Foolio"), "UV", rb_cObject);
@@ -858,4 +909,9 @@ void Init_foolio_ext(void) {
   Method(timer_set_repeat, 2);
   Method(timer_get_repeat, 1);
   Method(fs_event_init, 4);
+  Method(pipe_init, 2);
+  Method(pipe_open, 2);
+  Method(pipe_bind, 2);
+  Method(pipe_connect, 4);
+  Method(pipe_pending_instances, 2);
 }
