@@ -568,8 +568,8 @@ VALUE foolio__str(const char* str) {
 }
 
 void foolio__fs_event_cb(uv_fs_event_t* handle, const char* filename, int events, int status) {
-  VALUE argv[] = { foolio__str(filename), INT2FIX(events), INT2FIX(status) };
-  foolio__cb_apply(handle->loop, handle->data, 3, argv);
+  VALUE argv[] = { INT2FIX(events), INT2FIX(status) };
+  foolio__cb_apply(handle->loop, handle->data, 2, argv);
 }
 
 VALUE foolio_tcp_init(VALUE self, VALUE loop) {
@@ -794,9 +794,10 @@ VALUE foolio_fs_event_init(VALUE self, VALUE loop, VALUE filename, VALUE cb, VAL
   uv_fs_event_t* handle_ = malloc(sizeof(uv_fs_event_t));
   const char* filename_ = StringValueCStr(filename);
   handle_->data = (void*)callback(cb);
-  int flags_ = NUM2INT(flags);
+  int flags_ = FIX2INT(flags);
   int retval = uv_fs_event_init(loop_, handle_, filename_, foolio__fs_event_cb, flags_);
-  return Wrap(handle_, free);
+  CHECK(retval);
+  return Wrap(handle_, 0);
 }
 
 // UV_EXTERN int uv_pipe_init(uv_loop_t*, uv_pipe_t* handle, int ipc)
