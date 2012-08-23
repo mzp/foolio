@@ -264,8 +264,9 @@ VALUE foolio__make_buf(char* ptr, ssize_t size) {
   if(size == -1) {
     return Qnil;
   } else {
+    VALUE str = (VALUE)rb_thread_call_with_gvl(foolio___make_buf, &args);
     free(ptr);
-    return (VALUE)rb_thread_call_with_gvl(foolio___make_buf, &args);
+    return str;
   }
 }
 
