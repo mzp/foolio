@@ -13,7 +13,7 @@ libuv_dir = File.expand_path("../../libuv", __FILE__)
 foolio_dir = File.expand_path("../", __FILE__)
 
 Dir.chdir(libuv_dir) do 
-  system "make CFLAGS='-fPIC'"
+  system "make"
 end
 
 Dir.chdir(foolio_dir) do
