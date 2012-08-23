@@ -271,6 +271,10 @@ VALUE foolio__make_buf(char* ptr, ssize_t size) {
 
 void foolio__read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf){
   VALUE argv[] = { foolio__make_buf(buf.base, nread) };
+  for(int i = 0; i < nread; ++i){ 
+printf("%x", buf.base[i]);
+  }
+  printf("\n");
   foolio__cb_apply(stream->loop, stream->data, 1, argv);
 }
 
