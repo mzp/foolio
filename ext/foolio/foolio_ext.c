@@ -706,8 +706,9 @@ VALUE foolio_idle_init(VALUE self, VALUE loop) {
 }
 
 void foolio__idle_cb(uv_idle_t* handle, int status) {
-  VALUE argv[] = { INT2FIX(status) };
-  foolio__cb_apply(handle->loop, handle->data,1, argv);
+  uv_idle_t* handle_ = handle;
+  CHECK(status);
+  foolio__cb_apply(handle->loop, handle->data, 0, NULL);
 }
 
 VALUE foolio_idle_start(VALUE self, VALUE handle, VALUE cb) {
@@ -741,9 +742,9 @@ VALUE foolio_timer_init(VALUE self, VALUE loop) {
   InitHandle(timer);
 }
 
-static void timer_callback(uv_timer_t* handle, int status) {
-  VALUE argv[] = { INT2NUM(status) };
-  foolio__cb_apply(handle->loop, handle->data, 1, argv);
+static void timer_callback(uv_timer_t* handle_, int status) {
+  CHECK(status);
+  foolio__cb_apply(handle_->loop, handle_->data, 0, NULL);
 }
 
 VALUE foolio_timer_start(VALUE self, VALUE handle, VALUE cb, VALUE timeout, VALUE repeat) {
