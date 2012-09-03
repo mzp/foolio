@@ -95,7 +95,7 @@ module Foolio
     end
 
     def send(ip, port, data)
-      on_send = proc {|req, status|}
+      on_send = proc {|req|}
       Foolio::UV.udp_send(nil, @handle, data, Foolio::UV.ip4_addr(ip, port), on_send)
     end
   end
