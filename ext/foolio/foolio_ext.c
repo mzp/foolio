@@ -478,8 +478,10 @@ VALUE foolio_udp_set_ttl(VALUE self, VALUE handle, VALUE ttl) {
 }
 
 void foolio__udp_send_cb(uv_udp_send_t* req, int status) {
-  VALUE argv[] = { INT2FIX(status) };
-  foolio__cb_apply(req->handle->loop, req->handle->data, 1 , argv);
+  uv_udp_t* handle_ = req->handle;
+  CHECK(status);
+//  VALUE argv[] = { INT2FIX(status) };
+//  foolio__cb_apply(req->handle->loop, req->handle->data, 1 , argv);
 }
 
 // UV_EXTERN int uv_udp_send(uv_udp_send_t* req, uv_udp_t* handle, uv_buf_t bufs[], int bufcnt, struct sockaddr_in addr, uv_udp_send_cb send_cb)
@@ -499,7 +501,6 @@ VALUE foolio_udp_send(VALUE self, VALUE req, VALUE handle, VALUE buf, VALUE addr
   uv_buf_t bufs[] = {
     uv_buf_init(StringValueCStr(buf), (int)rb_str_strlen(buf))
   };
-  handle_->data = (void*)callback(send_cb);
   int retval = uv_udp_send(req_, handle_, bufs, 1 , *addr_, foolio__udp_send_cb);
   CHECK(retval);
   return INT2NUM(retval);
