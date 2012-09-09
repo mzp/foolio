@@ -23,6 +23,14 @@ module Foolio
     def on_write_complete(err); end
     def on_connect; end
     def on_close; end
+
+    def on_recv(data)
+      if data then
+        on_read(data)
+      else
+        close
+      end
+    end
   end
 
   class BlockHandler < Foolio::Handler
@@ -41,24 +49,19 @@ module Foolio
 
   class Stream < Foolio::Handle
     def listen_handler(backlog, klass, *args)
-      on_connect = callback do|status|
-        client = init
-        Foolio::UV.accept(@handle, client)
-        $log.info "accept #{client}"
-        handle = klass.new(client, *args)
-        handle.on_connect
-
-        on_read = callback {|data|
-          if data then
-            handle.on_read(data)
-          else
-            handle.close
-          end
-        }
-        Foolio::UV.read_start(client, on_read)
-      end
-      Foolio::UV.listen(@handle, backlog, on_connect)
+      @klass = klass
+      @args = args
+      Foolio::UV.listen(@handle, backlog, method(:on_connect))
       self
+    end
+
+    def on_connect(status)
+      client = init
+      Foolio::UV.accept(@handle, client)
+      $log.info "accept #{client}"
+      handle = @klass.new(client, *@args)
+      handle.on_connect
+      Foolio::UV.read_start(client, handle.method(:on_recv))
     end
 
     def listen(backlog=5, &block)
