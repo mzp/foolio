@@ -31,6 +31,10 @@ module Foolio
         close
       end
     end
+
+    def start
+      Foolio::UV.read_start(@handle, callback(&method(:on_recv)))
+    end
   end
 
   class BlockHandler < Foolio::Handler
@@ -51,7 +55,7 @@ module Foolio
     def listen_handler(backlog, klass, *args)
       @klass = klass
       @args = args
-      Foolio::UV.listen(@handle, backlog, method(:on_connect))
+      Foolio::UV.listen(@handle, backlog, callback(&method(:on_connect)))
       self
     end
 
@@ -61,7 +65,7 @@ module Foolio
       $log.info "accept #{client}"
       handle = @klass.new(client, *@args)
       handle.on_connect
-      Foolio::UV.read_start(client, handle.method(:on_recv))
+      handle.start
     end
 
     def listen(backlog=5, &block)
